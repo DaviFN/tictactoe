@@ -1,81 +1,31 @@
 use text_io::read;
 use std::io::Write;
 
-#[derive(Eq, PartialEq)]
-enum PieceType {
-    None,
-    Cross,
-    Circle
-}
+mod board;
 
-impl std::fmt::Display for PieceType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match *self {
-            PieceType::None => write!(f, "[ ]"),
-            PieceType::Cross => write!(f, "[X]"),
-            PieceType::Circle => write!(f, "[O]"),
-        }
-     }
-}
+use board::Board;
+use board::PieceLocation;
+use board::piece::Piece;
 
-fn create_board() -> [PieceType; 9]
-{
-    [
-        PieceType::None, PieceType::None, PieceType::None,
-        PieceType::None, PieceType::None, PieceType::None,
-        PieceType::None, PieceType::None, PieceType::None
-    ]
-}
-
-fn display_board(board: &[PieceType; 9])
-{
-    print!("{} {} {}\n{} {} {}\n{} {} {}\n", board[0], board[1], board[2], board[3], board[4], board[5], board[6], board[7], board[8]);
-}
-
-fn display_game_state(board: &[PieceType; 9], player1_name: &String, player2_name: &String) {
+fn display_game_state(board: &Board, player1_name: &String, player2_name: &String) {
     print!("board state:\n");
-    display_board(board);
+    print!("{}\n", board);
     print!("player 1: {}\n", player1_name);
     print!("player 2: {}\n", player2_name);
 }
 
-fn restart_game(board: &mut [PieceType; 9], turn_of_player1: &mut bool)
+fn restart_game(board: &mut Board, turn_of_player1: &mut bool)
 {
-    for piece in board {
-        *piece = PieceType::None;
-    }
+    board.restart();
     *turn_of_player1 = true;
 }
 
-fn access_piece_from_indices(board: &mut [PieceType; 9], index_x: u32, index_y: u32) -> &mut PieceType {
-    let board_position: usize = usize::try_from(index_x).unwrap() + 3 * usize::try_from(index_y).unwrap();
-    let piece_specified: &mut PieceType = &mut board[board_position];
-    piece_specified
-}
-
-fn is_in_win_condition_for_piece_type(board: &[PieceType; 9], piece_type: &PieceType) -> bool {
-    for i in 0..3 {
-        if board[3 * i] == *piece_type && board[3 * i + 1] == *piece_type && board[3 * i + 2] == *piece_type {
-            return true;
-        }
-        if board[i] == *piece_type && board[i + 3] == *piece_type && board[i + 6] == *piece_type {
-            return true;
-        }
-    }
-    if board[0] == *piece_type && board[4] == *piece_type && board[8] == *piece_type {
-        return true;
-    }
-    if board[2] == *piece_type && board[4] == *piece_type && board[6] == *piece_type {
-        return true;
-    }
-    false
-}
-
-fn handle_user_input(board: &mut [PieceType; 9], user_wants_to_quit: &mut bool, turn_of_player1: &mut bool, player1_name: &String, player2_name: &String)
+fn handle_user_input(board: &mut Board, user_wants_to_quit: &mut bool, turn_of_player1: &mut bool, player1_name: &String, player2_name: &String)
 {
-    print!("enter \"q\" or \"quit\" to quit,\n");
+    print!("enter \"q\" or \"quit\" to quit\n");
     print!("enter \"r\" or \"restart\" to restart\n");
     print!("\"x-y\" or \"xy\" to specify move (x and y being the coordinates of where you want to place your piece)\n");
+    print!("for example, a2 will specify row a and column 2\n");
     
     let mut name_of_player_to_act: &String = player1_name;
     if !*turn_of_player1 {
@@ -100,80 +50,39 @@ fn handle_user_input(board: &mut [PieceType; 9], user_wants_to_quit: &mut bool, 
         restart_game(board, turn_of_player1);
         return
     }
+    
+    let piece_location = PieceLocation::new(&user_input_string);
 
-    if string_represents_move(&user_input_string) {
-        let input_as_vec: Vec<char> = user_input_string.chars().collect();
-        
-        let move_x: &char = &input_as_vec[0];
-        let mut move_y: &char = &input_as_vec[1];
-        if input_as_vec.len() == 3 {
-            move_y = &input_as_vec[2];
-        }
-
-        let index_x: u32 = move_x.to_digit(10).unwrap() - 1;
-        let index_y: u32 = move_y.to_digit(10).unwrap() - 1;
-
-        let specific_piece: &mut PieceType = access_piece_from_indices(board, index_x, index_y);
-
-        let mut type_of_piece_based_on_player: PieceType = PieceType::Cross;
+    if(piece_location.is_valid()) {
+        let mut type_of_piece_based_on_player: Piece = Piece::Cross;
         if !*turn_of_player1 {
-            type_of_piece_based_on_player = PieceType::Circle;
+            type_of_piece_based_on_player = Piece::Circle;
         }
+
+        let piece = board.piece_in(&piece_location);
         
-        if *specific_piece != PieceType::None {
-            print!("there is already a piece there; choose another place\n");
+        match piece {
+            Some(_) => {
+                print!("there is already a piece there; choose another place\n");
             return
-        }
-        else {
-            *specific_piece = type_of_piece_based_on_player;
-            
-            let mut type_of_piece_based_on_player: PieceType = PieceType::Cross;
-            if !*turn_of_player1 {
-                type_of_piece_based_on_player = PieceType::Circle;
+            },
+            None => {
+                board.place_piece(&piece_location, &type_of_piece_based_on_player);
             }
-
-            if is_in_win_condition_for_piece_type(board, &type_of_piece_based_on_player) {
-                print!("{} wins!\n", name_of_player_to_act);
-                restart_game(board, turn_of_player1);
-            }
-
-            *turn_of_player1 = !*turn_of_player1;
         }
-
-        return
+        if board.is_in_win_condition_for_piece_type(&type_of_piece_based_on_player) {
+            print!("{} wins!\n", name_of_player_to_act);
+            restart_game(board, turn_of_player1);
+        }
+        *turn_of_player1 = !*turn_of_player1;
     }
-
-    print!("I don't know what you mean by \"{}\"...", user_input_string);
-
-
-
+    else {
+        print!("I don't know what you mean by \"{}\"...", user_input_string);
+    }
 }
-
-fn string_represents_move(str: &String) -> bool {
-    if str.len() == 2 {
-        let str_as_vec: Vec<char> = str.chars().collect();
-        if(str_as_vec[0] == '1' || str_as_vec[0] == '2' || str_as_vec[0] == '3') {
-            if(str_as_vec[1] == '1' || str_as_vec[1] == '2' || str_as_vec[1] == '3') {
-                return true;
-            }
-        }
-    }
-    else if str.len() == 3 {
-        let str_as_vec: Vec<char> = str.chars().collect();
-        if(str_as_vec[1] == '-') {
-            if(str_as_vec[0] == '1' || str_as_vec[0] == '2' || str_as_vec[0] == '3') {
-                if(str_as_vec[2] == '1' || str_as_vec[2] == '2' || str_as_vec[2] == '3') {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
 fn main() {
 
-    let mut board = create_board();
+    let mut board = Board::new();
 
     print!("enter player 1's name: ");
     std::io::stdout().flush();
